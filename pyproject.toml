@@ -1,5 +1,5 @@
 [project]
-name = "modwrapper"
+name = "modwrap"
 version = "1.0.0"
 description = "Python module wrapper for dynamic loading and callable signature validation."
 authors = [
@@ -22,10 +22,10 @@ dependencies = [
 
 
 [project.urls]
-repository = "https://github.com/n3rada/modwrapper"
+repository = "https://github.com/n3rada/modwrap"
 
 [project.scripts]
-modwrap = "modwrapper.console:run"
+modwrap = "modwrap.console:run"
 
 [tool.pytest.ini_options]
 python_files = "tests/test_*.py"
