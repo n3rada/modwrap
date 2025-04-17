@@ -28,17 +28,6 @@ class ModuleWrapper:
         self.__module_name = self.__module_path.stem
         self.__module = self._load_module()
 
-    def __getattr__(self, name: str):
-        """
-        Allows direct access to callables or attributes of the loaded module,
-        like: wrapper.func_name(...)
-        """
-        if hasattr(self.__module, name):
-            return getattr(self.__module, name)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{name}'"
-        )
-
     def _load_module(self) -> ModuleType:
         """
         Dynamically loads and returns a Python module from the file path provided during initialization.
@@ -175,3 +164,14 @@ class ModuleWrapper:
             return True
         except (TypeError, AttributeError):
             return False
+
+    # Properties
+    @property
+    def module(self) -> ModuleType:
+        """
+        Returns the loaded module object.
+
+        Returns:
+            ModuleType: The loaded Python module object.
+        """
+        return self.__module

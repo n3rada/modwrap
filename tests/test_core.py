@@ -26,7 +26,7 @@ class TestModuleWrapper(unittest.TestCase):
 
     def test_direct_callable_access(self):
         wrapper = ModuleWrapper(self.plugin_path)
-        result = wrapper.execute("ping")
+        result = wrapper.module.execute("ping")
         self.assertEqual(result, "Simulated execution: ping")
 
     def test_invalid_arg_type(self):
