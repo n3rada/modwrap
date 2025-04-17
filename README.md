@@ -7,7 +7,7 @@ Use `modwrap` directly in your Python code to load modules, validate function si
 
 
 ```python
-from modwrap.core import ModuleWrapper
+from modwrap import ModuleWrapper
 
 wrapper = ModuleWrapper("./tests/plugin.py")
 
