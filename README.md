@@ -1,6 +1,7 @@
 **modwrap** is a pure Python 3 utility (no external dependencies) that lets you dynamically load and execute functions from any Python module — either via code or command line. 🐍
 
 ## 📦 Installation
+
 Install directly from [PyPI](https://pypi.org/project/modwrap/):
 ```shell
 pip install modwrap
@@ -14,7 +15,7 @@ Use `modwrap` directly in your Python code to load modules, validate function si
 ```python
 from modwrap import ModuleWrapper
 
-wrapper = ModuleWrapper("./tests/plugin.py")
+wrapper = ModuleWrapper("./examples/shell.py")
 
 # Optional: Validate the function signature before calling
 wrapper.validate_signature("execute", {"command": str})
@@ -33,18 +34,18 @@ print(result)
 ### List available callables and their signatures
 
 ```shell
-modwrap list tests/plugin.py
+modwrap list ./examples/shell.py
 ```
 
 ### Call a function with positional arguments
 
 ```shell
-modwrap call tests/plugin.py execute "ls -tAbl"
+modwrap call ./examples/shell.py execute "ls -tAbl"
 ```
 
 ### Call a function with keyword arguments
 
 ```shell
-modwrap call tests/plugin.py execute --kwargs '{"command": "ls -tAbl"}'
+modwrap call ./examples/shell.py execute --kwargs '{"command": "ls -tAbl"}'
 ```
 

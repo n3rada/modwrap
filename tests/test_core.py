@@ -10,11 +10,40 @@ class TestModuleWrapper(unittest.TestCase):
     def setUp(self):
         self.plugin_path = Path(__file__).parent / "plugin.py"
 
-    def test_load_and_validate_execute(self):
+    def test_signature_with_dict(self):
         wrapper = ModuleWrapper(self.plugin_path)
-        wrapper.validate_signature("execute", {"command": str, "timeout": float})
-        result = wrapper.get_callable("execute")("hello", 2.5)
-        self.assertEqual(result, "Executed: hello in 2.5s")
+        wrapper.validate_signature("execute", {"command": str})
+
+    def test_signature_with_list_of_tuples(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        wrapper.validate_signature("execute", [("command", str)])
+
+    def test_get_callable_and_call(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        func = wrapper.get_callable("execute")
+        result = func("echo")
+        self.assertEqual(result, "Simulated execution: echo")
+
+    def test_direct_callable_access(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        result = wrapper.execute("ping")
+        self.assertEqual(result, "Simulated execution: ping")
+
+    def test_invalid_arg_type(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        func = wrapper.get_callable("execute")
+        with self.assertRaises(TypeError):
+            func(123)  # Not a string
+
+    def test_missing_signature_param(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        with self.assertRaises(TypeError):
+            wrapper.validate_signature("execute", {"command": str, "extra": int})
+
+    def test_wrong_type_in_signature(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        with self.assertRaises(TypeError):
+            wrapper.validate_signature("execute", {"command": int})  # should be str
 
 
 if __name__ == "__main__":
