@@ -1,5 +1,10 @@
-**modwrap** is a pure standard library (no external deps) Python3 module wrapper for dynamically loading modules and invoking their functions. 🐍
+**modwrap** is a pure Python 3 utility (no external dependencies) that lets you dynamically load and execute functions from any Python module — either via code or command line. 🐍
 
+## 📦 Installation
+Install directly from [PyPI](https://pypi.org/project/modwrap/):
+```shell
+pip install modwrap
+```
 
 ## 🔧 Programmatic Usage
 
