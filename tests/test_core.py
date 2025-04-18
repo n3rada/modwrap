@@ -29,6 +29,11 @@ class TestModuleWrapper(unittest.TestCase):
         result = wrapper.module.execute("ping")
         self.assertEqual(result, "Simulated execution: ping")
 
+    def test_get_doc_summary(self):
+        wrapper = ModuleWrapper(self.plugin_path)
+        summary = wrapper.get_doc_summary("execute")
+        self.assertEqual(summary, "Simulates command execution by echoing a message.")
+
     def test_invalid_arg_type(self):
         wrapper = ModuleWrapper(self.plugin_path)
         func = wrapper.get_callable("execute")

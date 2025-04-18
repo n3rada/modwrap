@@ -77,6 +77,37 @@ class ModuleWrapper:
             raise TypeError(f"'{func_name}' is not a callable.")
         return func
 
+    def get_doc(self, func_name: str) -> Union[str, None]:
+        """
+        Retrieves the docstring for a given function in the module.
+
+        Args:
+            func_name (str): The name of the function to inspect.
+
+        Returns:
+            Union[str, None]: Full docstring if available, else None.
+        """
+        func = self.get_callable(func_name)
+        doc = inspect.getdoc(func)
+        if not doc:
+            return None
+        return doc.strip()
+
+    def get_doc_summary(self, func_name: str) -> Union[str, None]:
+        """
+        Retrieves the summary line of the docstring for a given function in the module.
+
+        Args:
+            func_name (str): The name of the function to inspect.
+
+        Returns:
+            Union[str, None]: Summary line if available, else None.
+        """
+        doc = self.get_doc(func_name)
+        if not doc:
+            return None
+        return doc.splitlines()[0].strip()
+
     def validate_signature(
         self,
         func_name: str,

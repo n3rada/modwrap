@@ -57,6 +57,20 @@ def cmd_call(args):
     print(result)
 
 
+def cmd_doc(args):
+    wrapper = ModuleWrapper(args.module)
+
+    if args.full:
+        doc = wrapper.get_doc(args.function)
+    else:
+        doc = wrapper.get_doc_summary(args.function)
+
+    if doc:
+        print(doc)
+    else:
+        print(f"No docstring found for function '{args.function}'.")
+
+
 def run():
     parser = argparse.ArgumentParser(
         prog="modwrap", add_help=True, description="Python dynamic module wrapper"
@@ -75,6 +89,14 @@ def run():
         "--kwargs", help="Keyword arguments as a dict string, e.g. '{\"x\": 1}'"
     )
     p_call.set_defaults(func=cmd_call)
+
+    p_doc = subparsers.add_parser("doc", help="Show function docstring")
+    p_doc.add_argument("module", help="Path to the .py file")
+    p_doc.add_argument("function", help="Function to document")
+    p_doc.add_argument(
+        "--full", action="store_true", help="Show full docstring instead of summary"
+    )
+    p_doc.set_defaults(func=cmd_doc)
 
     args = parser.parse_args()
     args.func(args)
