@@ -56,26 +56,49 @@ class ModuleWrapper:
             ) from exc
         return module
 
-    def get_callable(self, func_name: str) -> Callable:
+    def _resolve_callable(self, name: str) -> Callable:
         """
-        Retrieves a callable (function) by name from the loaded module.
+        Resolves a callable from the module. Supports 'function' and 'Class.method'.
 
         Args:
-            func_name (str): The name of the function to retrieve from the module.
-
-        Raises:
-            AttributeError: If the function does not exist in the module.
-            TypeError: If the attribute exists but is not callable.
+            name (str): Either a function name or a dotted 'Class.method'.
 
         Returns:
-            Callable: The function object retrieved from the module.
+            Callable: The callable object.
+
+        Raises:
+            AttributeError or TypeError if not found or not callable.
         """
-        if not hasattr(self.__module, func_name):
-            raise AttributeError(f"Function '{func_name}' not found in module.")
-        func = getattr(self.__module, func_name)
+        if "." in name:
+            class_name, method_name = name.split(".", 1)
+            cls = self.get_class(class_name)
+            if not hasattr(cls, method_name):
+                raise AttributeError(
+                    f"Method '{method_name}' not found in class '{class_name}'"
+                )
+            func = getattr(cls, method_name)
+        else:
+            if not hasattr(self.__module, name):
+                raise AttributeError(f"Function '{name}' not found in module.")
+            func = getattr(self.__module, name)
+
         if not callable(func):
-            raise TypeError(f"'{func_name}' is not a callable.")
+            raise TypeError(f"'{name}' is not a callable.")
+
         return func
+
+    def get_callable(self, name: str) -> Callable:
+        """
+        Retrieves a callable from the module by name.
+        Supports both 'function' and 'Class.method' formats.
+
+        Args:
+            name (str): Function name or 'Class.method'.
+
+        Returns:
+            Callable: The callable object.
+        """
+        return self._resolve_callable(name)
 
     def get_class(self, class_name: str, must_inherit: type = None) -> type:
         """
@@ -118,7 +141,7 @@ class ModuleWrapper:
         Returns:
             Union[str, None]: Full docstring if available, else None.
         """
-        func = self.get_callable(func_name)
+        func = self._resolve_callable(func_name)
         doc = inspect.getdoc(func)
         if not doc:
             return None
@@ -135,22 +158,12 @@ class ModuleWrapper:
             Union[str, None]: Summary line if available, else None.
         """
         doc = self.get_doc(func_name)
-        if not doc:
+        if not isinstance(doc, str):
             return None
         return doc.splitlines()[0].strip()
 
-    def get_signature(self, func_name: str) -> dict:
-        """
-        Returns the signature of a function, including parameter names, types, and defaults.
-
-        Args:
-            func_name (str): The name of the function to inspect.
-
-        Returns:
-            dict: A mapping of parameter names to their type hints as strings.
-                Includes default value when available.
-        """
-        func = self.get_callable(func_name)
+    def get_signature(self, func_path: str) -> dict:
+        func = self._resolve_callable(func_path)
         sig = inspect.signature(func)
         hints = get_type_hints(func)
 
@@ -158,15 +171,11 @@ class ModuleWrapper:
         for param in sig.parameters.values():
             if param.name == "self":
                 continue
-
-            param_type = hints.get(param.name, "Any")
-            default = (
-                None if param.default is inspect.Parameter.empty else param.default
-            )
-
             signature[param.name] = {
-                "type": str(param_type),
-                "default": default,
+                "type": str(hints.get(param.name, "Any")),
+                "default": (
+                    None if param.default is inspect.Parameter.empty else param.default
+                ),
             }
 
         return signature
@@ -196,7 +205,7 @@ class ModuleWrapper:
             TypeError: If expected_args is not a supported format (dict or list).
             TypeError: If a list entry is neither a string nor a (name, type) tuple.
         """
-        func = self.get_callable(func_name)
+        func = self._resolve_callable(func_name)
         sig = inspect.signature(func)
         params = list(sig.parameters.values())
         type_hints = get_type_hints(func)
