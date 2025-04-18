@@ -12,20 +12,12 @@ from modwrap.core import ModuleWrapper
 def cmd_list(args):
     wrapper = ModuleWrapper(args.module)
     funcs = []
-    for name in dir(wrapper._ModuleWrapper__module):
-        obj = getattr(wrapper._ModuleWrapper__module, name)
+
+    for name in dir(wrapper.module):
+        obj = getattr(wrapper.module, name)
         if callable(obj) and not name.startswith("_"):
-            sig = inspect.signature(obj)
-            hints = typing.get_type_hints(obj)
-            funcs.append(
-                {
-                    "name": name,
-                    "args": {
-                        param.name: str(hints.get(param.name, "Any"))
-                        for param in sig.parameters.values()
-                    },
-                }
-            )
+            funcs.append({"name": name, "args": wrapper.get_signature(name)})
+
     print(json.dumps(funcs, indent=2))
 
 

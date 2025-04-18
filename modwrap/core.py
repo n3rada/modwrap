@@ -139,6 +139,38 @@ class ModuleWrapper:
             return None
         return doc.splitlines()[0].strip()
 
+    def get_signature(self, func_name: str) -> dict:
+        """
+        Returns the signature of a function, including parameter names, types, and defaults.
+
+        Args:
+            func_name (str): The name of the function to inspect.
+
+        Returns:
+            dict: A mapping of parameter names to their type hints as strings.
+                Includes default value when available.
+        """
+        func = self.get_callable(func_name)
+        sig = inspect.signature(func)
+        hints = get_type_hints(func)
+
+        signature = {}
+        for param in sig.parameters.values():
+            if param.name == "self":
+                continue
+
+            param_type = hints.get(param.name, "Any")
+            default = (
+                None if param.default is inspect.Parameter.empty else param.default
+            )
+
+            signature[param.name] = {
+                "type": str(param_type),
+                "default": default,
+            }
+
+        return signature
+
     def validate_signature(
         self,
         func_name: str,
