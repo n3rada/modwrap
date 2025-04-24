@@ -1,6 +1,6 @@
 [project]
 name = "modwrap"
-version = "1.0.4"
+version = "1.0.5"
 description = "Python module wrapper for dynamic loading and callable signature validation."
 authors = [
     {name = "n3rada",email = "72791564+n3rada@users.noreply.github.com"}
