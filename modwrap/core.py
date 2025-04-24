@@ -1,13 +1,22 @@
 import inspect
 from pathlib import Path
 from types import ModuleType
-from typing import Callable, Union, Tuple, get_type_hints
+from typing import Callable, get_type_hints
 from importlib.util import spec_from_file_location, module_from_spec
+from functools import lru_cache
 
 
 class ModuleWrapper:
     def __init__(self, module_path: str):
+        """
+        Initializes the ModuleWrapper with a path to a Python module.
 
+        Args:
+            module_path (str): Path to the .py file.
+
+        Raises:
+            ValueError, TypeError, FileNotFoundError, IsADirectoryError, ValueError
+        """
         if module_path is None:
             raise ValueError("Module path cannot be None.")
 
@@ -28,6 +37,7 @@ class ModuleWrapper:
         self.__module_name = self.__module_path.stem
         self.__module = self._load_module()
 
+    @lru_cache(maxsize=128)
     def _load_module(self) -> ModuleType:
         """
         Dynamically loads and returns a Python module from the file path provided during initialization.
@@ -36,7 +46,6 @@ class ModuleWrapper:
 
         Raises:
             ImportError: If the module spec could not be created or the module could not be executed.
-            ImportError: If the module contains import-time errors or exceptions during loading.
 
         Returns:
             ModuleType: The loaded Python module object.
@@ -56,6 +65,7 @@ class ModuleWrapper:
             ) from exc
         return module
 
+    @lru_cache(maxsize=128)
     def _resolve_callable(self, name: str) -> Callable:
         """
         Resolves a callable from the module. Supports 'function' and 'Class.method'.
@@ -86,6 +96,46 @@ class ModuleWrapper:
             raise TypeError(f"'{name}' is not a callable.")
 
         return func
+
+    def _validate_dict_signature(
+        self,
+        expected_args: dict[str, type],
+        params: dict[str, inspect.Parameter],
+        type_hints: dict[str, type],
+    ) -> None:
+        for name, expected_type in expected_args.items():
+            if name not in params:
+                raise TypeError(f"Missing expected argument: '{name}'")
+            actual_type = type_hints.get(name)
+            if actual_type != expected_type:
+                raise TypeError(
+                    f"Argument '{name}' has type {actual_type}, expected {expected_type}"
+                )
+
+    def _validate_list_signature(
+        self,
+        expected_args: list[str | tuple[str, type]],
+        params: dict[str, inspect.Parameter],
+        type_hints: dict[str, type],
+    ) -> None:
+        for item in expected_args:
+            if isinstance(item, tuple) and len(item) == 2:
+                expected_name, expected_type = item
+            elif isinstance(item, str):
+                expected_name = item
+                expected_type = type_hints.get(expected_name)
+            else:
+                raise TypeError(f"Invalid item in expected_args list: {item}")
+
+            if expected_name not in params:
+                raise TypeError(f"Missing expected argument: '{expected_name}'")
+
+            if expected_type is not None:
+                actual_type = type_hints.get(expected_name)
+                if actual_type != expected_type:
+                    raise TypeError(
+                        f"Argument '{expected_name}' has type {actual_type}, expected {expected_type}"
+                    )
 
     def get_callable(self, name: str) -> Callable:
         """
@@ -131,7 +181,7 @@ class ModuleWrapper:
 
         return cls
 
-    def get_doc(self, func_name: str) -> Union[str, None]:
+    def get_doc(self, func_name: str) -> str | None:
         """
         Retrieves the docstring for a given function in the module.
 
@@ -139,15 +189,13 @@ class ModuleWrapper:
             func_name (str): The name of the function to inspect.
 
         Returns:
-            Union[str, None]: Full docstring if available, else None.
+            str | None: Full docstring if available, else None.
         """
         func = self._resolve_callable(func_name)
         doc = inspect.getdoc(func)
-        if not doc:
-            return None
-        return doc.strip()
+        return doc.strip() if doc else None
 
-    def get_doc_summary(self, func_name: str) -> Union[str, None]:
+    def get_doc_summary(self, func_name: str) -> str | None:
         """
         Retrieves the summary line of the docstring for a given function in the module.
 
@@ -155,14 +203,21 @@ class ModuleWrapper:
             func_name (str): The name of the function to inspect.
 
         Returns:
-            Union[str, None]: Summary line if available, else None.
+            str | None: Summary line if available, else None.
         """
         doc = self.get_doc(func_name)
-        if not isinstance(doc, str):
-            return None
-        return doc.splitlines()[0].strip()
+        return doc.splitlines()[0].strip() if isinstance(doc, str) else None
 
-    def get_signature(self, func_path: str) -> dict:
+    def get_signature(self, func_path: str) -> dict[str, dict[str, object]]:
+        """
+        Extracts the function signature from a callable.
+
+        Args:
+            func_path (str): Name of the function or 'Class.method'.
+
+        Returns:
+            dict[str, dict[str, object]]: Mapping of argument names to their type and default.
+        """
         func = self._resolve_callable(func_path)
         sig = inspect.signature(func)
         hints = get_type_hints(func)
@@ -183,65 +238,28 @@ class ModuleWrapper:
     def validate_signature(
         self,
         func_name: str,
-        expected_args: Union[list[Tuple[str, type]], dict[str, type]],
+        expected_args: list[str | tuple[str, type]] | dict[str, type],
     ) -> None:
         """
         Validates that a function from the loaded module matches the expected argument names
         and (optionally) their type annotations.
 
-        Supports both dictionary and list formats for specifying expected arguments:
-        - A dictionary of {name: type} enforces both name and type.
-        - A list of argument names as strings (e.g., ["x", "y"]) enforces presence.
-        - A list of (name, type) tuples enforces both presence and type.
-
         Args:
-            func_name (str): The name of the function to validate from the module.
-            expected_args (Union[list[Union[str, Tuple[str, type]]], dict[str, type]]):
-                Expected arguments and their types.
+            func_name (str): The name of the function to validate.
+            expected_args (list or dict): Expected arguments and their types.
 
         Raises:
-            TypeError: If the function does not have the expected arguments.
-            TypeError: If a provided argument does not match the expected type.
-            TypeError: If expected_args is not a supported format (dict or list).
-            TypeError: If a list entry is neither a string nor a (name, type) tuple.
+            TypeError: If validation fails.
         """
         func = self._resolve_callable(func_name)
         sig = inspect.signature(func)
-        params = list(sig.parameters.values())
+        params = {p.name: p for p in sig.parameters.values()}
         type_hints = get_type_hints(func)
 
         if isinstance(expected_args, dict):
-            for name, expected_type in expected_args.items():
-                match = next((p for p in params if p.name == name), None)
-                if not match:
-                    raise TypeError(f"Missing expected argument: '{name}'")
-                actual_type = type_hints.get(name)
-                if actual_type != expected_type:
-                    raise TypeError(
-                        f"Argument '{name}' has type {actual_type}, expected {expected_type}"
-                    )
-
+            self._validate_dict_signature(expected_args, params, type_hints)
         elif isinstance(expected_args, list):
-            for item in expected_args:
-                if isinstance(item, tuple) and len(item) == 2:
-                    expected_name, expected_type = item
-                elif isinstance(item, str):
-                    expected_name = item
-                    expected_type = type_hints.get(expected_name)
-                else:
-                    raise TypeError(f"Invalid item in expected_args list: {item}")
-
-                param = next((p for p in params if p.name == expected_name), None)
-                if not param:
-                    raise TypeError(f"Missing expected argument: '{expected_name}'")
-
-                if expected_type is not None:
-                    actual_type = type_hints.get(expected_name)
-                    if actual_type != expected_type:
-                        raise TypeError(
-                            f"Argument '{expected_name}' has type {actual_type}, expected {expected_type}"
-                        )
-
+            self._validate_list_signature(expected_args, params, type_hints)
         else:
             raise TypeError(
                 "expected_args must be a dict or list of (name, type) pairs."
@@ -250,17 +268,16 @@ class ModuleWrapper:
     def is_signature_valid(
         self,
         func_name: str,
-        expected_args: Union[list, dict],
+        expected_args: list | dict,
     ) -> bool:
         """
         Checks whether a function in the loaded module matches the given argument names
         and (optionally) their expected types.
 
-        This is a non-raising alternative to `validate_signature()`. Returns `True` if
-        validation passes, and `False` otherwise.
+        This is a non-raising alternative to `validate_signature()`.
 
         Returns:
-            bool: True if the function matches the expected signature, False otherwise.
+            bool: True if valid, False otherwise.
         """
         try:
             self.validate_signature(func_name, expected_args)
@@ -268,7 +285,6 @@ class ModuleWrapper:
         except (TypeError, AttributeError):
             return False
 
-    # Properties
     @property
     def module(self) -> ModuleType:
         """
