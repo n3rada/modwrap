@@ -150,36 +150,26 @@ class ModuleWrapper:
         """
         return self._resolve_callable(name)
 
-    def get_class(self, class_name: str, must_inherit: type = None) -> type:
+    def get_class(
+        self, name: str | None = None, must_inherit: type | None = None
+    ) -> type | None:
         """
-        Retrieves a class by name from the loaded module, optionally verifying inheritance.
-
-        Args:
-            class_name (str): Name of the class to retrieve.
-            must_inherit (type, optional): Base class that the target must inherit from.
-
-        Raises:
-            AttributeError: If the class is not found in the module.
-            TypeError: If the attribute exists but is not a class.
-            TypeError: If must_inherit is specified and the class does not inherit from it.
-
-        Returns:
-            type: The class object.
+        Returns the class by name, or the first class in the module if name is None.
+        Optionally filters by inheritance (e.g., must inherit from BaseAction).
         """
-        if not hasattr(self.__module, class_name):
-            raise AttributeError(f"Class '{class_name}' not found in module.")
+        for _, obj in self.module.__dict__.items():
+            if not isinstance(obj, type):
+                continue
 
-        cls = getattr(self.__module, class_name)
+            if name and obj.__name__ != name:
+                continue
 
-        if not isinstance(cls, type):
-            raise TypeError(f"'{class_name}' is not a class.")
+            if must_inherit and not issubclass(obj, must_inherit):
+                continue
 
-        if must_inherit is not None and not issubclass(cls, must_inherit):
-            raise TypeError(
-                f"'{class_name}' must inherit from {must_inherit.__name__}."
-            )
+            return obj  # found match
 
-        return cls
+        return None
 
     def get_doc(self, func_name: str) -> str | None:
         """
