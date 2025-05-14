@@ -161,13 +161,17 @@ class ModuleWrapper:
             if not isinstance(obj, type):
                 continue
 
+            # Only consider classes defined in this module (not imported ones)
+            if obj.__module__ != self.module.__name__:
+                continue
+
             if name and obj.__name__ != name:
                 continue
 
             if must_inherit and not issubclass(obj, must_inherit):
                 continue
 
-            return obj  # found match
+            return obj  # first match
 
         return None
 
