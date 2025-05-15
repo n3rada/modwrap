@@ -1,6 +1,6 @@
 [project]
 name = "modwrap"
-version = "1.0.7"
+version = "1.0.8"
 description = "Python module wrapper for dynamic loading and callable signature validation."
 authors = [
     {name = "n3rada",email = "72791564+n3rada@users.noreply.github.com"}
@@ -16,10 +16,9 @@ classifiers = [
 keywords = ["wrapper", "module", "code", "dynamic", "loading", "signature", "validation"]
 license = {text = "GPL-3.0-or-later"}
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.13,<4.0"
+requires-python = ">=3.12,<4.0"
 dependencies = [
 ]
-
 
 [project.urls]
 repository = "https://github.com/n3rada/modwrap"
