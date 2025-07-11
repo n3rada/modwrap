@@ -9,14 +9,14 @@ maintainers = [
     {name = "n3rada",email = "72791564+n3rada@users.noreply.github.com"}
 ]
 classifiers = [
-  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.8",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 keywords = ["wrapper", "module", "code", "dynamic", "loading", "signature", "validation"]
 license = {text = "GPL-3.0-or-later"}
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.12,<4.0"
+requires-python = ">=3.8,<4.0"
 dependencies = [
 ]
 
