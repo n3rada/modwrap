@@ -1,7 +1,7 @@
 import inspect
 from pathlib import Path
 from types import ModuleType
-from typing import Callable, get_type_hints
+from typing import Callable, get_type_hints, Union, List, Dict, Optional
 from importlib.util import spec_from_file_location, module_from_spec
 from functools import lru_cache
 
@@ -99,9 +99,9 @@ class ModuleWrapper:
 
     def _validate_dict_signature(
         self,
-        expected_args: dict[str, type],
-        params: dict[str, inspect.Parameter],
-        type_hints: dict[str, type],
+        expected_args: Dict[str, type],
+        params: Dict[str, inspect.Parameter],
+        type_hints: Dict[str, type],
     ) -> None:
         for name, expected_type in expected_args.items():
             if name not in params:
@@ -114,9 +114,9 @@ class ModuleWrapper:
 
     def _validate_list_signature(
         self,
-        expected_args: list[str | tuple[str, type]],
-        params: dict[str, inspect.Parameter],
-        type_hints: dict[str, type],
+        expected_args: List[Union[str, tuple]],
+        params: Dict[str, inspect.Parameter],
+        type_hints: Dict[str, type],
     ) -> None:
         for item in expected_args:
             if isinstance(item, tuple) and len(item) == 2:
@@ -151,8 +151,8 @@ class ModuleWrapper:
         return self._resolve_callable(name)
 
     def get_class(
-        self, name: str | None = None, must_inherit: type | None = None
-    ) -> type | None:
+        self, name: Optional[str] = None, must_inherit: Optional[type] = None
+    ) -> Optional[type]:
         """
         Returns the class by name, or the first class in the module if name is None.
         Optionally filters by inheritance (e.g., must inherit from BaseAction).
@@ -175,7 +175,7 @@ class ModuleWrapper:
 
         return None
 
-    def get_doc(self, func_name: str) -> str | None:
+    def get_doc(self, func_name: str) -> Optional[str]:
         """
         Retrieves the docstring for a given function in the module.
 
@@ -189,7 +189,7 @@ class ModuleWrapper:
         doc = inspect.getdoc(func)
         return doc.strip() if doc else None
 
-    def get_doc_summary(self, func_name: str) -> str | None:
+    def get_doc_summary(self, func_name: str) -> Optional[str]:
         """
         Retrieves the summary line of the docstring for a given function in the module.
 
@@ -202,7 +202,7 @@ class ModuleWrapper:
         doc = self.get_doc(func_name)
         return doc.splitlines()[0].strip() if isinstance(doc, str) else None
 
-    def get_signature(self, func_path: str) -> dict[str, dict[str, object]]:
+    def get_signature(self, func_path: str) -> Dict[str, Dict[str, object]]:
         """
         Extracts the function signature from a callable.
 
@@ -232,7 +232,7 @@ class ModuleWrapper:
     def validate_signature(
         self,
         func_name: str,
-        expected_args: list[str | tuple[str, type]] | dict[str, type],
+        expected_args: Union[List[Union[str, tuple]], Dict[str, type]],
     ) -> None:
         """
         Validates that a function from the loaded module matches the expected argument names
@@ -262,7 +262,7 @@ class ModuleWrapper:
     def is_signature_valid(
         self,
         func_name: str,
-        expected_args: list | dict,
+        expected_args: Union[List, Dict],
     ) -> bool:
         """
         Checks whether a function in the loaded module matches the given argument names
