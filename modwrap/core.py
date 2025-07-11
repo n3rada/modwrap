@@ -71,6 +71,18 @@ class ModuleWrapper:
         """
         return self.__module_path
 
+    @property
+    def name(self) -> str:
+        """
+        Returns the name of the module without the file extension.
+
+        This is derived from the file name of the module.
+
+        Returns:
+            str: The name of the module (without .py extension).
+        """
+        return self.__module_name
+
     @lru_cache(maxsize=128)
     def _load_module(self) -> ModuleType:
         """
