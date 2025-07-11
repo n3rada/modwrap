@@ -37,6 +37,40 @@ class ModuleWrapper:
         self.__module_name = self.__module_path.stem
         self.__module = self._load_module()
 
+    def __str__(self) -> str:
+        """
+        Returns a string representation of the ModuleWrapper instance.
+        """
+        return f"{self.__module_name} ({self.__module_path})"
+
+    def __repr__(self) -> str:
+        return (
+            f"ModuleWrapper(module_path={repr(str(self.__module_path))}, "
+            f"module_name={repr(self.__module_name)})"
+        )
+
+    @property
+    def module(self) -> ModuleType:
+        """
+        Returns the loaded module object.
+
+        Returns:
+            ModuleType: The loaded Python module object.
+        """
+        return self.__module
+
+    @property
+    def path(self) -> Path:
+        """
+        Returns the absolute, resolved file system path to the loaded Python module.
+
+        This is the path provided during initialization, validated to be a `.py` file.
+
+        Returns:
+            Path: The resolved `Path` object pointing to the module file.
+        """
+        return self.__module_path
+
     @lru_cache(maxsize=128)
     def _load_module(self) -> ModuleType:
         """
@@ -97,46 +131,6 @@ class ModuleWrapper:
 
         return func
 
-    def _validate_dict_signature(
-        self,
-        expected_args: Dict[str, type],
-        params: Dict[str, inspect.Parameter],
-        type_hints: Dict[str, type],
-    ) -> None:
-        for name, expected_type in expected_args.items():
-            if name not in params:
-                raise TypeError(f"Missing expected argument: '{name}'")
-            actual_type = type_hints.get(name)
-            if actual_type != expected_type:
-                raise TypeError(
-                    f"Argument '{name}' has type {actual_type}, expected {expected_type}"
-                )
-
-    def _validate_list_signature(
-        self,
-        expected_args: List[Union[str, tuple]],
-        params: Dict[str, inspect.Parameter],
-        type_hints: Dict[str, type],
-    ) -> None:
-        for item in expected_args:
-            if isinstance(item, tuple) and len(item) == 2:
-                expected_name, expected_type = item
-            elif isinstance(item, str):
-                expected_name = item
-                expected_type = type_hints.get(expected_name)
-            else:
-                raise TypeError(f"Invalid item in expected_args list: {item}")
-
-            if expected_name not in params:
-                raise TypeError(f"Missing expected argument: '{expected_name}'")
-
-            if expected_type is not None:
-                actual_type = type_hints.get(expected_name)
-                if actual_type != expected_type:
-                    raise TypeError(
-                        f"Argument '{expected_name}' has type {actual_type}, expected {expected_type}"
-                    )
-
     def get_callable(self, name: str) -> Callable:
         """
         Retrieves a callable from the module by name.
@@ -154,9 +148,24 @@ class ModuleWrapper:
         self, name: Optional[str] = None, must_inherit: Optional[type] = None
     ) -> Optional[type]:
         """
-        Returns the class by name, or the first class in the module if name is None.
-        Optionally filters by inheritance (e.g., must inherit from BaseAction).
+        Retrieves a class from the loaded module.
+
+        If `name` is provided, returns the class with that exact name.
+        If `name` is not provided, returns the first class found in the module.
+
+        Optionally, if `must_inherit` is specified, the returned class must be a subclass
+        of the given type.
+
+        Only classes defined in the target module (not imported ones) are considered.
+
+        Args:
+            name (Optional[str]): The name of the class to retrieve. If None, any matching class is returned.
+            must_inherit (Optional[type]): If provided, only classes that inherit from this type are considered.
+
+        Returns:
+            Optional[type]: The matching class object, or None if no match is found.
         """
+
         for _, obj in self.module.__dict__.items():
             if not isinstance(obj, type):
                 continue
@@ -279,12 +288,76 @@ class ModuleWrapper:
         except (TypeError, AttributeError):
             return False
 
-    @property
-    def module(self) -> ModuleType:
+    def _validate_dict_signature(
+        self,
+        expected_args: Dict[str, type],
+        params: Dict[str, inspect.Parameter],
+        type_hints: Dict[str, type],
+    ) -> None:
         """
-        Returns the loaded module object.
+        Validates that each argument in `expected_args` exists in the actual function signature
+        (`params`) and matches the expected type from `type_hints`.
 
-        Returns:
-            ModuleType: The loaded Python module object.
+        This is used to verify that a function's signature aligns with a dictionary-based
+        specification of argument names and types.
+
+        Args:
+            expected_args (Dict[str, type]): A mapping of expected argument names to expected types.
+            params (Dict[str, inspect.Parameter]): Actual parameters from the target function's signature.
+            type_hints (Dict[str, type]): Type hints extracted from the function to validate against.
+
+        Raises:
+            TypeError: If an expected argument is missing from the function's signature.
+            TypeError: If the actual type hint for an argument does not match the expected type.
         """
-        return self.__module
+        for name, expected_type in expected_args.items():
+            if name not in params:
+                raise TypeError(f"Missing expected argument: '{name}'")
+            actual_type = type_hints.get(name)
+            if actual_type != expected_type:
+                raise TypeError(
+                    f"Argument '{name}' has type {actual_type}, expected {expected_type}"
+                )
+
+    def _validate_list_signature(
+        self,
+        expected_args: List[Union[str, tuple]],
+        params: Dict[str, inspect.Parameter],
+        type_hints: Dict[str, type],
+    ) -> None:
+        """
+        Validates that each expected argument is present in the actual function parameters
+        and (optionally) matches the expected type.
+
+        This version accepts a list of expected argument names (as strings) or
+        (name, type) tuples. If only a name is provided, the type hint from the function
+        itself is used for comparison.
+
+        Args:
+            expected_args (List[Union[str, tuple]]): List of argument names or (name, type) pairs.
+            params (Dict[str, inspect.Parameter]): Parameters from the function's signature.
+            type_hints (Dict[str, type]): Type hints extracted from the function.
+
+        Raises:
+            TypeError: If an expected argument is missing from the function signature.
+            TypeError: If the actual type hint for an argument does not match the expected type.
+            TypeError: If an item in the expected_args list is neither a string nor a (name, type) tuple.
+        """
+        for item in expected_args:
+            if isinstance(item, tuple) and len(item) == 2:
+                expected_name, expected_type = item
+            elif isinstance(item, str):
+                expected_name = item
+                expected_type = type_hints.get(expected_name)
+            else:
+                raise TypeError(f"Invalid item in expected_args list: {item}")
+
+            if expected_name not in params:
+                raise TypeError(f"Missing expected argument: '{expected_name}'")
+
+            if expected_type is not None:
+                actual_type = type_hints.get(expected_name)
+                if actual_type != expected_type:
+                    raise TypeError(
+                        f"Argument '{expected_name}' has type {actual_type}, expected {expected_type}"
+                    )
