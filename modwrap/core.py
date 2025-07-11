@@ -156,6 +156,23 @@ class ModuleWrapper:
         """
         return self._resolve_callable(name)
 
+    def has_callable(self, name: str) -> bool:
+        """
+        Checks whether a callable exists in the module, including support for
+        functions and class methods using 'Class.method' notation.
+
+        Args:
+            name (str): Name of the callable, either a function or 'Class.method'.
+
+        Returns:
+            bool: True if the callable exists and is callable, False otherwise.
+        """
+        try:
+            self._resolve_callable(name)
+            return True
+        except (AttributeError, TypeError):
+            return False
+
     def get_class(
         self, name: Optional[str] = None, must_inherit: Optional[type] = None
     ) -> Optional[type]:
