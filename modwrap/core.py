@@ -1,7 +1,8 @@
 import inspect
 from pathlib import Path
 from types import ModuleType
-from typing import Callable, get_type_hints, Union, List, Dict, Optional
+from typing import get_type_hints, Union, List, Dict, Optional
+from collections.abc import Callable
 from importlib.util import spec_from_file_location, module_from_spec
 
 
