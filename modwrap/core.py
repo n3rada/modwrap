@@ -3,7 +3,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Callable, get_type_hints, Union, List, Dict, Optional
 from importlib.util import spec_from_file_location, module_from_spec
-from functools import lru_cache
 
 
 class ModuleWrapper:
@@ -83,7 +82,6 @@ class ModuleWrapper:
         """
         return self.__module_name
 
-    @lru_cache(maxsize=128)
     def _load_module(self) -> ModuleType:
         """
         Dynamically loads and returns a Python module from the file path provided during initialization.
@@ -111,7 +109,6 @@ class ModuleWrapper:
             ) from exc
         return module
 
-    @lru_cache(maxsize=128)
     def _resolve_callable(self, name: str) -> Callable:
         """
         Resolves a callable from the module. Supports 'function' and 'Class.method'.
