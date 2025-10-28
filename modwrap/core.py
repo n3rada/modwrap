@@ -1,7 +1,9 @@
+import ast
 import inspect
+import sys
 from pathlib import Path
 from types import ModuleType
-from typing import get_type_hints, Union, List, Dict, Optional
+from typing import get_type_hints, Union, List, Dict, Optional, Set
 from collections.abc import Callable
 from importlib.util import spec_from_file_location, module_from_spec
 
@@ -109,6 +111,102 @@ class ModuleWrapper:
                 f"Failed to import module '{self.__module_name}'. Try running it directly first to debug."
             ) from exc
         return module
+
+    def get_dependencies(self) -> Dict[str, List[str]]:
+        """
+        Analyzes the module's imports and categorizes them into standard library,
+        third-party, and local imports.
+
+        Returns:
+            Dict[str, List[str]]: A dictionary with keys:
+                - 'stdlib': Standard library modules
+                - 'third_party': External packages that may need installation
+                - 'local': Local/relative imports from the same project
+                - 'missing': Imports that couldn't be resolved
+        """
+        with open(self.__module_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=str(self.__module_path))
+
+        imports = set()
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    # Get top-level package name
+                    imports.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.level == 0:  # Absolute import
+                    imports.add(node.module.split(".")[0])
+
+        stdlib = set()
+        third_party = set()
+        local = set()
+        missing = set()
+
+        for name in imports:
+            if self._is_stdlib(name):
+                stdlib.add(name)
+            elif self._is_local_import(name):
+                local.add(name)
+            else:
+                # Try to import to check if it's installed
+                try:
+                    __import__(name)
+                    third_party.add(name)
+                except ImportError:
+                    missing.add(name)
+
+        return {
+            "stdlib": sorted(stdlib),
+            "third_party": sorted(third_party),
+            "local": sorted(local),
+            "missing": sorted(missing),
+        }
+
+    def _is_stdlib(self, module_name: str) -> bool:
+        """
+        Checks if a module is part of the Python standard library.
+
+        Args:
+            module_name (str): The module name to check.
+
+        Returns:
+            bool: True if the module is part of the standard library.
+        """
+        if module_name in sys.builtin_module_names:
+            return True
+
+        try:
+            module = __import__(module_name)
+            if hasattr(module, "__file__") and module.__file__:
+                module_path = Path(module.__file__)
+                stdlib_path = Path(sys.prefix) / "lib"
+                return str(module_path).startswith(str(stdlib_path))
+            return True  # Builtin modules without __file__
+        except ImportError:
+            return False
+
+    def _is_local_import(self, module_name: str) -> bool:
+        """
+        Checks if a module is a local import (in the same directory or project).
+
+        Args:
+            module_name (str): The module name to check.
+
+        Returns:
+            bool: True if the module appears to be a local import.
+        """
+        # Check if there's a .py file with this name in the same directory
+        potential_file = self.__module_path.parent / f"{module_name}.py"
+        if potential_file.exists():
+            return True
+
+        # Check if there's a package directory
+        potential_dir = self.__module_path.parent / module_name
+        if potential_dir.is_dir() and (potential_dir / "__init__.py").exists():
+            return True
+
+        return False
 
     def _resolve_callable(self, name: str) -> Callable:
         """
@@ -295,7 +393,34 @@ class ModuleWrapper:
                 "expected_args must be a dict or list of (name, type) pairs."
             )
 
-    def is_signature_valid(
+    def validate_args(
+        self,
+        func_name: str,
+        expected_args: List[str],
+    ) -> None:
+        """
+        Validates that a function has the expected argument names, ignoring types.
+
+        This method only checks that the function accepts parameters with the given names,
+        without validating their type annotations. Useful when you only care about the
+        function signature structure, not the types.
+
+        Args:
+            func_name (str): The name of the function to validate.
+            expected_args (List[str]): List of expected argument names.
+
+        Raises:
+            TypeError: If any expected argument name is missing from the function signature.
+        """
+        func = self._resolve_callable(func_name)
+        sig = inspect.signature(func)
+        params = {p.name for p in sig.parameters.values() if p.name != "self"}
+
+        for arg_name in expected_args:
+            if arg_name not in params:
+                raise TypeError(f"Missing expected argument: '{arg_name}'")
+
+    def has_signature(
         self,
         func_name: str,
         expected_args: Union[List, Dict],
@@ -311,6 +436,29 @@ class ModuleWrapper:
         """
         try:
             self.validate_signature(func_name, expected_args)
+            return True
+        except (TypeError, AttributeError):
+            return False
+
+    def has_args(
+        self,
+        func_name: str,
+        expected_args: List[str],
+    ) -> bool:
+        """
+        Checks whether a function has the expected argument names, ignoring types.
+
+        This is a non-raising alternative to `validate_args()`.
+
+        Args:
+            func_name (str): The name of the function to check.
+            expected_args (List[str]): List of expected argument names.
+
+        Returns:
+            bool: True if all expected argument names are present, False otherwise.
+        """
+        try:
+            self.validate_args(func_name, expected_args)
             return True
         except (TypeError, AttributeError):
             return False
