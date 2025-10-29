@@ -1,4 +1,4 @@
-**modwrap** is a pure Python 3 utility (no external dependencies) that lets you dynamically load and execute functions from any Python module — either via code or command line. 🐍
+**modwrap** is a pure Python 3 utility (no external dependencies) that lets you dynamically load and execute functions from any Python module. 🐍
 
 ## 📦 Installation
 
