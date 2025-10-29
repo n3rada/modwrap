@@ -7,6 +7,11 @@ Install directly from [PyPI](https://pypi.org/project/modwrap/):
 pip install modwrap
 ```
 
+Could be add to your project using `poetry`:
+```shell
+poetry add modwrap
+```
+
 ## 🔧 Programmatic Usage
 
 Use `modwrap` in your Python code to load modules, introspect callable signatures, and execute functions dynamically:
