@@ -35,8 +35,18 @@ class ModuleWrapper:
         if not self.__module_path.is_file():
             raise IsADirectoryError(f"Path is not a file: {self.__module_path}")
 
-        if self.__module_path.suffix != ".py":
-            raise ValueError(f"Not a .py file: {self.__module_path}")
+        # Always validate that the file contains valid Python source by parsing it.
+        try:
+            src = self.__module_path.read_text(encoding="utf-8")
+        except Exception as exc:
+            raise ValueError(f"Unable to read file: {self.__module_path}") from exc
+
+        try:
+            ast.parse(src, filename=str(self.__module_path))
+        except SyntaxError as exc:
+            raise ValueError(
+                f"File does not contain valid Python source: {self.__module_path}: {exc}"
+            ) from exc
 
         self.__module_name = self.__module_path.stem
         self.__module = self._load_module()
