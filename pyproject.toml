@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "modwrap"
-version = "1.1.5"
+version = "1.1.6"
 description = "Python module wrapper for dynamic loading and callable signature validation."
 authors = [
     {name = "n3rada",email = "72791564+n3rada@users.noreply.github.com"}
