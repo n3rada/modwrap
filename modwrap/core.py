@@ -11,12 +11,16 @@ from importlib.util import spec_from_file_location, module_from_spec
 
 
 class ModuleWrapper:
-    def __init__(self, module_path: str):
+    # Class-level default maximum file size (bytes) to parse
+    MAX_BYTES: int = 1_000_000
+
+    def __init__(self, module_path: str, allow_large: bool = False):
         """
         Initializes the ModuleWrapper with a path to a Python module.
 
         Args:
             module_path (str): Path to the .py file.
+            allow_large (bool): If True, skip the size check and allow parsing large files.
 
         Raises:
             ValueError, TypeError, FileNotFoundError, IsADirectoryError, ValueError
@@ -34,6 +38,21 @@ class ModuleWrapper:
 
         if not self.__module_path.is_file():
             raise IsADirectoryError(f"Path is not a file: {self.__module_path}")
+
+        # Use class-level MAX_BYTES as the effective size limit; do not store on instance
+        effective_max = self.MAX_BYTES
+
+        # Size check: avoid reading/parsing very large files unless explicitly allowed
+        try:
+            size = self.__module_path.stat().st_size
+        except Exception as exc:
+            raise ValueError(f"Unable to stat file: {self.__module_path}") from exc
+
+        if (effective_max is not None) and (size > effective_max) and not allow_large:
+            raise ValueError(
+                f"File is too large to parse ({size} bytes) — limit is {effective_max} bytes. "
+                f"Pass allow_large=True to override."
+            )
 
         # Always validate that the file contains valid Python source by parsing it.
         try:
