@@ -1,3 +1,5 @@
+# modwrap/core.py
+
 import ast
 import inspect
 import sys
