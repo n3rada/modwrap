@@ -1,3 +1,5 @@
+# modwrap/core.py
+
 # Built-in imports
 import ast
 import inspect
@@ -11,19 +13,18 @@ from importlib.util import spec_from_file_location, module_from_spec
 
 class ModuleWrapper:
     """
-    Robust dynamic Python module loader.
+    Dynamic and safe Python module loader.
 
     Supports:
-    • Standalone scripts
-    • Package-aware imports
-    • src layout
-    • Namespace packages
-    • uv / pipx / editable installs
-    • Correct relative import resolution
-
-    A module is considered part of a package if it lies under a project
-    root containing a `pyproject.toml` file.
+    - Standalone modules
+    - Packages and namespace packages
+    - pyproject.toml discovery
+    - src layout
+    - uv / pipx compatibility
+    - Relative imports
     """
+
+    # Constants
 
     MAX_BYTES: int = 1_000_000
 
@@ -32,20 +33,13 @@ class ModuleWrapper:
     def __init__(
         self, module_path: Union[str, Path], allow_large: bool = False
     ) -> None:
-        """
-        Initialize module loader.
-
-        Args:
-            module_path: Path to Python file.
-            allow_large: Disable size safeguard for large files.
-
-        Raises:
-            ValueError, TypeError, FileNotFoundError, IsADirectoryError
-        """
         if not isinstance(module_path, (str, Path)):
             raise TypeError("module_path must be a string or Path")
 
         self._path = Path(module_path).expanduser().resolve(strict=True)
+
+        if not self._path.exists():
+            raise FileNotFoundError(f"File not found: {self._path}")
 
         if not self._path.is_file():
             raise IsADirectoryError(f"Not a file: {self._path}")
@@ -58,27 +52,35 @@ class ModuleWrapper:
         self._name: str = self._path.stem
         self._module: ModuleType = self._load_module()
 
+    # Dunder methods
+
+    def __repr__(self) -> str:
+        return f"ModuleWrapper(path={self._path!s}, name={self._name!r})"
+
+    def __str__(self) -> str:
+        return str(self._path)
+
     # Properties
 
     @property
     def module(self) -> ModuleType:
-        """Return the loaded Python module."""
+        """Loaded module object."""
         return self._module
 
     @property
     def path(self) -> Path:
-        """Return absolute module file path."""
+        """Absolute file path."""
         return self._path
 
     @property
     def name(self) -> str:
-        """Return resolved module name."""
+        """Resolved module name."""
         return self._name
 
-    # Public methods
+    # Public API
 
     def get_callable(self, name: str) -> Callable:
-        """Return a callable by name."""
+        """Return callable by name (supports Class.method)."""
         return self._resolve_callable(name)
 
     def has_callable(self, name: str) -> bool:
@@ -89,45 +91,105 @@ class ModuleWrapper:
         except Exception:
             return False
 
-    def get_class(
-        self,
-        name: Optional[str] = None,
-        must_inherit: Optional[type] = None,
-    ) -> Optional[type]:
-        """
-        Return first class matching constraints.
+    def validate_args(self, func_name: str, expected: List[str]) -> None:
+        """Validate function has given arguments."""
+        fn = self._resolve_callable(func_name)
+        sig = inspect.signature(fn)
+        names = {p.name for p in sig.parameters.values() if p.name != "self"}
 
-        Args:
-            name: Class name filter.
-            must_inherit: Base class constraint.
-        """
+        for arg in expected:
+            if arg not in names:
+                raise TypeError(f"Missing expected argument: {arg}")
+
+    def has_args(self, func_name: str, expected: List[str]) -> bool:
+        """Non-raising version of validate_args()."""
+        try:
+            self.validate_args(func_name, expected)
+            return True
+        except Exception:
+            return False
+
+    def validate_signature(
+        self,
+        func_name: str,
+        expected: Union[Dict[str, type], List[Union[str, tuple]]],
+    ) -> None:
+        """Validate callable signature and types."""
+        fn = self._resolve_callable(func_name)
+        sig = inspect.signature(fn)
+        params = sig.parameters
+        annotations = fn.__annotations__
+
+        if isinstance(expected, dict):
+            for k, t in expected.items():
+                if k not in params:
+                    raise TypeError(f"Missing parameter: {k}")
+                if annotations.get(k) != t:
+                    raise TypeError(
+                        f"Bad type for {k}: expected {t}, got {annotations.get(k)}"
+                    )
+
+        elif isinstance(expected, list):
+            for item in expected:
+                if isinstance(item, tuple):
+                    name, t = item
+                else:
+                    name, t = item, None
+
+                if name not in params:
+                    raise TypeError(f"Missing parameter: {name}")
+                if t and annotations.get(name) != t:
+                    raise TypeError(
+                        f"Bad type for {name}: expected {t}, got {annotations.get(name)}"
+                    )
+
+        else:
+            raise TypeError("expected must be dict or list")
+
+    def has_signature(
+        self,
+        func_name: str,
+        expected: Union[Dict[str, type], List],
+    ) -> bool:
+        """Non-raising version of validate_signature()."""
+        try:
+            self.validate_signature(func_name, expected)
+            return True
+        except Exception:
+            return False
+
+    def get_class(
+        self, name: Optional[str] = None, must_inherit: Optional[type] = None
+    ) -> Optional[type]:
+        """Return matching class defined in module."""
         for obj in self._module.__dict__.values():
-            if isinstance(obj, type) and obj.__module__ == self._module.__name__:
-                if name and obj.__name__ != name:
-                    continue
-                if must_inherit and not issubclass(obj, must_inherit):
-                    continue
-                return obj
+            if not isinstance(obj, type):
+                continue
+            if obj.__module__ != self._module.__name__:
+                continue
+            if name and obj.__name__ != name:
+                continue
+            if must_inherit and not issubclass(obj, must_inherit):
+                continue
+            return obj
         return None
 
     def get_dependencies(self) -> Dict[str, List[str]]:
-        """
-        Analyze imports as stdlib / third-party / missing.
-
-        Returns:
-            Dict with keys: stdlib, third_party, missing
-        """
+        """Categorize imports as stdlib / third-party / missing."""
         tree = ast.parse(self._path.read_text(), filename=str(self._path))
         imports = set()
 
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                for name in getattr(node, "names", []):
-                    imports.add(name.name.split(".")[0])
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    imports.add(n.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
                 if node.module and node.level == 0:
                     imports.add(node.module.split(".")[0])
 
-        stdlib, third, missing = set(), set(), set()
+        stdlib = set()
+        third = set()
+        missing = set()
 
         for name in imports:
             try:
@@ -146,30 +208,32 @@ class ModuleWrapper:
             "missing": sorted(missing),
         }
 
-    # Private methods
+    # Internal helpers
 
     def _resolve_callable(self, name: str) -> Callable:
         if "." in name:
-            cls, attr = name.split(".", 1)
+            cls, func = name.split(".", 1)
             obj = self.get_class(cls)
-            if not obj or not hasattr(obj, attr):
-                raise AttributeError
-            fn = getattr(obj, attr)
+            if not obj:
+                raise AttributeError(cls)
+            fn = getattr(obj, func, None)
         else:
             fn = getattr(self._module, name, None)
 
         if not callable(fn):
-            raise TypeError
+            raise TypeError(f"{name} is not callable")
+
         return fn
 
     def _validate_source(self) -> None:
         try:
             ast.parse(self._path.read_text(), filename=str(self._path))
         except SyntaxError as exc:
-            raise ValueError(f"Invalid Python code: {self._path}") from exc
+            raise ValueError(f"Invalid Python syntax in {self._path}") from exc
 
     def _load_module(self) -> ModuleType:
         name = self._resolve_module_name()
+
         spec = spec_from_file_location(
             name,
             str(self._path),
@@ -177,20 +241,20 @@ class ModuleWrapper:
         )
 
         if spec is None or spec.loader is None:
-            raise ImportError(f"Unable to load {name}")
+            raise ImportError(f"Unable to load module: {name}")
 
         module = module_from_spec(spec)
-        sys.modules[name] = module  # Critical for relative imports
-
+        sys.modules[name] = module
         spec.loader.exec_module(module)
         return module
 
     def _resolve_module_name(self) -> str:
-        project = self._find_project_root()
-        if not project:
+        root = self._find_project_root()
+
+        if not root:
             return self._path.stem
 
-        for base in (project / "src", project):
+        for base in (root / "src", root):
             try:
                 rel = self._path.relative_to(base).with_suffix("")
                 return ".".join(rel.parts)
