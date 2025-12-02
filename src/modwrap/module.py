@@ -1,11 +1,12 @@
 # modwrap/core.py
 
+# Built-in imports
 import ast
 import inspect
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import get_type_hints, Union, List, Dict, Optional, Set
+from typing import get_type_hints, Union, List, Dict, Optional
 from collections.abc import Callable
 from importlib.util import spec_from_file_location, module_from_spec
 

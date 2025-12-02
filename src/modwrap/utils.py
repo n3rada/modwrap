@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Generator
 
 # Local library imports
-from modwrap.core import ModuleWrapper
-
+from .module import ModuleWrapper
 
 def iter_modules(directory: str) -> "Generator[ModuleWrapper, None, None]":
     """
