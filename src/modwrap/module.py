@@ -6,7 +6,7 @@ import inspect
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, get_type_hints
 from collections.abc import Callable
 from importlib.util import spec_from_file_location, module_from_spec
 
@@ -31,7 +31,7 @@ class ModuleWrapper:
     # Constructor
 
     def __init__(
-        self, module_path: Union[str, Path], allow_large: bool = False
+        self, module_path: Union[str, Path], allow_large_file: bool = False
     ) -> None:
         if not isinstance(module_path, (str, Path)):
             raise TypeError("module_path must be a string or Path")
@@ -44,7 +44,7 @@ class ModuleWrapper:
         if not self._path.is_file():
             raise IsADirectoryError(f"Not a file: {self._path}")
 
-        if not allow_large and self._path.stat().st_size > self.MAX_BYTES:
+        if not allow_large_file and self._path.stat().st_size > self.MAX_BYTES:
             raise ValueError(f"File too large: {self._path}")
 
         self._validate_source()
@@ -173,6 +173,47 @@ class ModuleWrapper:
                 continue
             return obj
         return None
+
+    def get_doc(self, func_name: str) -> Optional[str]:
+        """Return full docstring of a callable."""
+        fn = self._resolve_callable(func_name)
+        doc = inspect.getdoc(fn)
+        return doc.strip() if doc else None
+
+    def get_doc_summary(self, func_name: str) -> Optional[str]:
+        """Return first line of callable docstring."""
+        doc = self.get_doc(func_name)
+        return doc.splitlines()[0].strip() if doc else None
+
+    def get_signature(self, func_path: str) -> Dict[str, Dict[str, object]]:
+        """
+        Extract the signature of a callable as a structured mapping.
+
+        Args:
+            func_path: Name of the function or 'Class.method'.
+
+        Returns:
+            Dict[str, Dict[str, object]]: Mapping of argument names to:
+                - "type": stringified type annotation or "Any"
+                - "default": default value or None if no default
+        """
+        fn = self._resolve_callable(func_path)
+        sig = inspect.signature(fn)
+        hints = get_type_hints(fn)
+
+        signature: Dict[str, Dict[str, object]] = {}
+        for param in sig.parameters.values():
+            if param.name == "self":
+                continue
+
+            signature[param.name] = {
+                "type": str(hints.get(param.name, "Any")),
+                "default": (
+                    None if param.default is inspect.Parameter.empty else param.default
+                ),
+            }
+
+        return signature
 
     def get_dependencies(self) -> Dict[str, List[str]]:
         """Categorize imports as stdlib / third-party / missing."""
